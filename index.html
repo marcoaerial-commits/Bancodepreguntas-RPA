@@ -1,0 +1,342 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Simulador Credencial RPAS</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: una columna estrecha tipo tablero de instrucción; tarjeta de pregunta como "ficha de examen", barra de progreso como cinta de rumbo */
+:root{
+  --bg:#EEF2F5; --panel:#FFFFFF; --ink:#16212B; --muted:#5C6B78; --line:#D3DCE3;
+  --accent:#1D4E89; --accent-ink:#FFFFFF; --signal:#E8A317;
+  --ok:#1E7B4A; --ok-bg:#E1F2E8; --bad:#B42318; --bad-bg:#FBE6E3;
+  --chip:#E4EBF2;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F161D; --panel:#18222C; --ink:#E6EDF3; --muted:#9AA9B6; --line:#2B3946;
+  --accent:#6FA8E8; --accent-ink:#0B1520; --signal:#F2B637;
+  --ok:#5CCB8D; --ok-bg:#16301F; --bad:#FF8A7A; --bad-bg:#3A1A17; --chip:#22303C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F161D; --panel:#18222C; --ink:#E6EDF3; --muted:#9AA9B6; --line:#2B3946;
+  --accent:#6FA8E8; --accent-ink:#0B1520; --signal:#F2B637;
+  --ok:#5CCB8D; --ok-bg:#16301F; --bad:#FF8A7A; --bad-bg:#3A1A17; --chip:#22303C; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--body)}
+.wrap{max-width:720px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px}
+h1{font:700 2rem/1 var(--display);letter-spacing:.02em;text-transform:uppercase;margin:0;text-wrap:balance}
+h1 span{color:var(--accent)}
+.sub{color:var(--muted);font-size:.85rem}
+.tag{font:600 .72rem var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:20px}
+h2{font:600 1.35rem/1.15 var(--display);text-transform:uppercase;letter-spacing:.03em;margin:0 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.opt{display:flex;flex-direction:column;gap:2px;text-align:left;border:2px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:12px 14px;cursor:pointer;font:inherit}
+.opt b{font:600 1.05rem var(--display);text-transform:uppercase;letter-spacing:.04em}
+.opt small{color:var(--muted)}
+.opt[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{font:600 1rem var(--display);letter-spacing:.08em;text-transform:uppercase;border:0;border-radius:6px;padding:12px 20px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--ink);border:2px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{border-left:3px solid var(--accent);padding:2px 0 2px 10px}
+.stat .n{font:700 1.6rem/1 var(--display);font-variant-numeric:tabular-nums}
+.stat .l{font-size:.78rem;color:var(--muted)}
+@media (max-width:480px){.stats{grid-template-columns:repeat(2,1fr)}}
+/* barra de progreso */
+.track{height:8px;background:var(--chip);border-radius:4px;overflow:hidden}
+.track i{display:block;height:100%;background:var(--accent);transition:width .25s}
+.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.chip{display:inline-block;background:var(--chip);color:var(--ink);border-radius:3px;padding:1px 8px;font:600 .72rem var(--display);letter-spacing:.1em;text-transform:uppercase}
+.qnum{font:700 1.1rem var(--display);color:var(--accent);letter-spacing:.06em}
+.stem{font-size:1.08rem;font-weight:600;margin:8px 0 10px}
+.stem code,.metar{font-family:var(--mono);font-size:.88em;background:var(--chip);padding:1px 5px;border-radius:3px;word-break:break-word}
+ol.items{margin:0 0 12px;padding-left:2.2em;list-style:upper-roman;color:var(--ink)}
+ol.items li{margin:2px 0}
+.answers{display:flex;flex-direction:column;gap:8px}
+.ans{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:start;text-align:left;width:100%;font:inherit;color:var(--ink);background:var(--panel);border:2px solid var(--line);border-radius:6px;padding:10px 12px;cursor:pointer}
+.ans .k{font:700 1rem/1.5 var(--display);text-transform:uppercase;color:var(--muted)}
+.ans:hover:not(:disabled){border-color:var(--accent)}
+.ans.sel{border-color:var(--accent);background:var(--chip)}
+.ans.ok{border-color:var(--ok);background:var(--ok-bg)}
+.ans.ok .k{color:var(--ok)}
+.ans.bad{border-color:var(--bad);background:var(--bad-bg)}
+.ans.bad .k{color:var(--bad)}
+.ans:disabled{cursor:default}
+.fb{border-left:4px solid var(--ok);background:var(--ok-bg);padding:10px 12px;border-radius:0 6px 6px 0}
+.fb.bad{border-color:var(--bad);background:var(--bad-bg)}
+.fb strong{display:block}
+.fb .note{font-size:.88rem;color:var(--muted);margin-top:4px}
+.score{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.big{font:700 3.6rem/1 var(--display);font-variant-numeric:tabular-nums}
+.verdict{font:700 1.1rem var(--display);letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:4px}
+.verdict.pass{background:var(--ok-bg);color:var(--ok)}
+.verdict.fail{background:var(--bad-bg);color:var(--bad)}
+.review{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.rv{border-top:1px solid var(--line);padding-top:10px}
+.rv p{margin:2px 0}
+.rv .you{color:var(--bad)}
+.rv .right{color:var(--ok);font-weight:600}
+.sw{display:inline-flex;border:2px solid var(--line);border-radius:6px;overflow:hidden}
+.sw button{font:600 .95rem var(--display);letter-spacing:.06em;text-transform:uppercase;background:transparent;color:var(--ink);border:0;padding:8px 14px;cursor:pointer}
+.sw button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.hint{font-size:.85rem;color:var(--muted);margin:6px 0 0}
+.rank{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.rank th{font:600 .72rem var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:2px solid var(--line)}
+.rank td{padding:8px;border-bottom:1px solid var(--line)}
+.rank td.num,.rank th.num{text-align:right}
+.rank tr.me td{background:var(--chip);font-weight:700}
+.pos{font:700 1.05rem var(--display);color:var(--accent);width:2.2em}
+.namebox{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
+.namebox input{flex:1 1 180px;min-width:0;font:inherit;padding:10px 12px;border:2px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.namebox input:focus-visible{outline:3px solid var(--signal);outline-offset:1px}
+.msg{font-size:.88rem;color:var(--muted);margin:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+[hidden]{display:none!important}body{margin:0}</style></head><body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="tag">DGAC Chile · Banco marzo 2026</div>
+      <h1>Simulador <span>RPAS</span></h1>
+    </div>
+    <div class="sub">79 preguntas · DAN 151 Ed. 3</div>
+  </header>
+
+  <!-- INICIO -->
+  <section id="home" class="panel" aria-labelledby="h-home">
+    <h2 id="h-home">Configura tu práctica</h2>
+    <div class="stats" id="stats"></div>
+
+    <p class="tag" style="margin:18px 0 6px">Modo</p>
+    <div class="grid" id="modes">
+      <button class="opt" data-mode="practica" aria-pressed="true" id="m-practica"><b>Práctica</b><small>Ves si acertaste y la explicación en cada pregunta.</small></button>
+      <button class="opt" data-mode="examen" aria-pressed="false" id="m-examen"><b>Examen</b><small>Respondes todo y ves el resultado al final. Se aprueba con 75%.</small></button>
+    </div>
+
+    <p class="tag" style="margin:18px 0 6px">Tema</p>
+    <div class="grid" id="temas"></div>
+
+    <p class="tag" style="margin:18px 0 6px">Cantidad de preguntas</p>
+    <div class="sw" id="cant" role="group" aria-label="Cantidad de preguntas">
+      <button data-n="10" aria-pressed="false">10</button>
+      <button data-n="20" aria-pressed="true">20</button>
+      <button data-n="40" aria-pressed="false">40</button>
+      <button data-n="0" aria-pressed="false">Todas</button>
+    </div>
+    <p class="hint" id="cantHint"></p>
+
+    <div class="row" style="margin-top:20px">
+      <button class="btn" id="start">Comenzar</button>
+      <button class="btn ghost" id="startErr" hidden>Repasar mis errores</button>
+    </div>
+  </section>
+
+  <!-- RANKING -->
+  <section id="rankPanel" class="panel" hidden aria-labelledby="h-rank">
+    <h2 id="h-rank">Ranking del grupo</h2>
+    <p class="msg" id="rankMsg">Cargando ranking…</p>
+    <form class="namebox" id="nameForm" hidden>
+      <label for="nick" class="tag" style="flex-basis:100%">Tu nombre en el ranking</label>
+      <input id="nick" maxlength="24" autocomplete="nickname" placeholder="Ej: Marco S.">
+      <button class="btn" type="submit" id="saveNick">Guardar</button>
+    </form>
+    <div style="overflow-x:auto"><table class="rank" id="rankTbl" hidden>
+      <thead><tr><th>#</th><th>Nombre</th><th class="num">Mejor</th><th class="num">Último</th><th class="num">Exámenes</th></tr></thead>
+      <tbody id="rankBody"></tbody></table></div>
+    <p class="hint">Solo cuentan los exámenes en modo Examen de 10 o más preguntas.</p>
+  </section>
+
+  <!-- PREGUNTA -->
+  <section id="quiz" hidden aria-live="polite">
+    <div class="meta"><span id="qpos"></span><span id="qscore"></span></div>
+    <div class="track" style="margin:6px 0 14px"><i id="bar" style="width:0"></i></div>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between"><span class="qnum" id="qnum"></span><span class="chip" id="qtema"></span></div>
+      <p class="stem" id="qstem"></p>
+      <ol class="items" id="qitems"></ol>
+      <div class="answers" id="qans"></div>
+      <div id="qfb" style="margin-top:14px" hidden></div>
+      <div class="row" style="margin-top:16px;justify-content:space-between">
+        <button class="btn ghost" id="quit">Salir</button>
+        <button class="btn" id="next" disabled>Siguiente</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTADO -->
+  <section id="result" class="panel" hidden>
+    <h2>Resultado</h2>
+    <div class="score"><div class="big" id="pct"></div><div><div id="verdict"></div><div class="sub" id="detail" style="margin-top:6px"></div></div></div>
+    <div class="row" style="margin-top:18px">
+      <button class="btn" id="again">Nuevo intento</button>
+      <button class="btn ghost" id="retryErr">Repasar errores</button>
+      <button class="btn ghost" id="home2">Inicio</button>
+    </div>
+    <h2 style="margin-top:24px" id="revTitle">Preguntas falladas</h2>
+    <div class="review" id="review"></div>
+  </section>
+</div>
+
+<script>
+const BANK = [{"n":1,"t":"Normativa","q":"Además de los requisitos técnicos de la norma DAN 151 para los vuelos en zonas urbanas se deberá cumplir con lo siguiente:","it":["Sólo se podrá volar hasta 30 metros medidos horizontalmente de una persona ajena a la operación.","Solo se podrá operar en condiciones BVLOS.","Para vuelos encima de 120 mts (400 pies) se deberá obtener previamente la autorización de la DGAC."],"o":["Solo I y II.","Solo II y III.","Solo I y III.","I, II y III."],"a":2,"nota":"DAN 151 Ed. 3 (2024), 151.104 b: 30 m horizontal de personas ajenas y autorización DGAC sobre 120 m (400 pies). El ítem II es falso."},{"n":2,"t":"Normativa","q":"¿Cuál de las siguientes afirmaciones no está prohibida según la DAN 91?","it":[],"o":["Poner en riesgo la vida e integridad de las personas.","Poner en riesgo la propiedad pública o privada.","Operar en forma descuidada o temeraria, poniendo en riesgo a otras aeronaves en tierra o en el espacio aéreo.","Operar fuera de áreas pobladas con autorización de la DGAC."],"a":3,"nota":""},{"n":3,"t":"Normativa","q":"¿Cuáles son los pasos a seguir para la obtención de un permiso de vuelo con RPAS sobre área poblada que existan centros urbanos con asentamientos de personas habitacionales y laborales?","it":[],"o":["Sólo con el permiso del dueño del lugar.","Permiso del dueño, propietario o administrador del lugar y luego informar al centro de control de tránsito aéreo.","Enviar formulario de solicitud de autorización de vuelo, carta del dueño propietario del lugar, KMZ del área a sobrevolar.","Enviar formulario de solicitud de autorización de vuelo indicando el objetivo del vuelo explicitando el trabajo aéreo según DAN 119 en concordancia a los trabajos autorizados en su AOC, carta del dueño propietario del lugar, KMZ del área a sobrevolar y la documentación del registro de aeronave, credencial de operador RPAS y póliza de seguro o resolución de la JAC."],"a":3,"nota":""},{"n":4,"t":"Normativa","q":"Cual es uno de los requisitos fundamentales para operar en áreas pobladas según la norma DAN 151, para mitigar los riesgos de daños a personas e infraestructura y dar cumplimiento a la seguridad operacional:","it":[],"o":["El peso máximo del RPA debe ser de hasta 19 kg incluyendo accesorios.","El RPA debe haber sido construido o armado desde diferentes kits de distintos fabricantes.","El RPA debe contar con paracaídas de emergencia durante su operación.","El RPA debe ser volado solo en forma autónoma."],"a":2,"nota":"DAN 151 Ed. 3 (2024), 151.005."},{"n":5,"t":"Normativa","q":"De acuerdo al Art 82 del Código Aeronáutico, quedan prohibidas todas las operaciones de vuelos y sobrevuelos de RPAS de cualquier peso de despegue sobre:","it":[],"o":["Áreas densamente pobladas como centros urbanos o similares.","Instalaciones militares, unidades de flota y bases aéreas de las Fuerzas Armadas, además de instalaciones carcelarias e instalaciones estratégicas definidas por el Estado de Chile.","Sobre aglomeración de personas al aire libre como conciertos o festivales.","Sobre parques nacionales y áreas protegidas."],"a":1,"nota":""},{"n":6,"t":"Normativa","q":"Dentro de los requisitos técnicos exigidos a un RPA está:","it":[],"o":["La aeronave debe haber sido construida de un kit de fábrica y contar con instructivos técnicos de operación.","Contar solo con motores eléctrico.","Puede ser armado de piezas y partes de diferentes fabricantes y no contar con instructivos técnicos de operación.","Ser de estructura metálica y partes plásticas."],"a":0,"nota":""},{"n":7,"t":"Normativa","q":"Durante la operación de una aeronave pilotada a distancia quedará prohibido:","it":["Operar en zonas prohibidas y peligrosas publicadas por la DGAC.","Operar más de un RPA en forma simultánea.","Violar los derechos de otras personas en su privacidad y su intimidad."],"o":["Solo I.","Solo I y II.","Solo I y III.","I, II y III."],"a":3,"nota":""},{"n":8,"t":"Normativa","q":"Durante la operación en vuelo del RPAS el operador de RPAS debe permitir salvar cualquier obstáculo y personas que no estén involucradas en la operación, con un margen vertical de ______mts y con una separación horizontal de ________mts","it":[],"o":["10 y 20.","20 y 30.","30 y 20.","20 y 10."],"a":1,"nota":"DAN 151 Ed. 3 (2024), 151.103 j: margen vertical 20 m y separación horizontal 30 m."},{"n":9,"t":"Aerodinámica","q":"El ángulo de ataque es:","it":[],"o":["El ángulo formado entre la cuerda aerodinámica y la dirección del viento relativo.","El ángulo con el cual sube más deprisa el avión.","El ángulo formado entre el horizonte y el viento relativo.","El ángulo formado entre el borde de fuga y el viento relativo."],"a":0,"nota":""},{"n":10,"t":"Aerodinámica","q":"El camino seguido por una aeronave durante su desplazamiento por el aire, se denomina:","it":[],"o":["Aerovía.","Viento relativo.","Trayectoria de vuelo.","Trayectoria."],"a":2,"nota":""},{"n":11,"t":"METAR","q":"El METAR de Valdivia registra: METAR SCVD 211400Z 12003KT 4000 VCFG BKN020 04/03 Q1026= la visibilidad está restringida por:","it":[],"o":["Niebla.","Niebla baja.","Niebla en la vecindad.","Niebla en bancos."],"a":1,"nota":""},{"n":12,"t":"Aerodinámica","q":"El movimiento alrededor del eje lateral, se denomina:","it":[],"o":["Alabeo.","Cabeceo.","Pérdida.","Ganancia."],"a":2,"nota":""},{"n":13,"t":"Normativa","q":"El peso máximo de despegue de un RPA de acuerdo a la norma DAN 151 debe ser de hasta:","it":[],"o":["6 kilos.","8 kilos.","9 kilos.","7 kilos."],"a":2,"nota":"DAN 151 Ed. 3 (2024), 151.005 a (sin contar el paracaídas)."},{"n":14,"t":"Normativa","q":"El plazo para enviar las solicitudes de operación según Anexo D de la norma DAN 91 y apéndice a de la norma DAN 151 es de:","it":[],"o":["10 días hábiles.","5 días hábiles.","15 días hábiles.","7 días hábiles."],"a":3,"nota":"DAN 151 Ed. 3 (2024), Apéndice A: 7 días hábiles de anticipación."},{"n":15,"t":"Normativa","q":"En caso de incumplimiento de la normativa aeronáutica dará motivo para que la DGAC aplique lo establecido en el siguiente reglamento del procedimiento infraccional aeronáutico:","it":[],"o":["DAR 13.","DAR 06.","DAR 51.","DAR 61."],"a":2,"nota":""},{"n":16,"t":"Normativa","q":"En cuanto a las responsabilidades del operador de un RPAS, el código penal en su artículo 161-a, establece que se castigará con al que, en recintos particulares o lugares que no sean de libre acceso al público, sin autorización del afectado y por cualquier medio, capte, intercepte, grabe o reproduzca conversaciones o comunicaciones de carácter privado; sustraiga, fotografié, fotocopie o reproduzca documentos o instrumentos de carácter privado; o capte, grabe, filme o fotografié imágenes o hechos de carácter privado que se produzcan, realicen, ocurran o existan en recintos particulares o lugares que no sean de libre acceso al público.","it":[],"o":["Con presidio menor.","Sólo una multa, dependiendo de la infracción.","Con la pena de reclusión menor en cualquiera de sus grados y multa de 50 a 500 unidades tributarias mensuales.","Una multa determinada por la sección infraccional de la DGAC."],"a":2,"nota":""},{"n":17,"t":"METAR","q":"En METAR, la abreviatura NIL significa:","it":[],"o":["Estación cerrada.","Instrumentos fuera de servicio.","Reparación de instalaciones.","Estación ausente o datos faltantes."],"a":3,"nota":""},{"n":18,"t":"METAR","q":"En punta arenas se informaron los siguientes datos: METAR SCCI 160800Z 29014G24KT 9999 FEW013 01/M03 Q0985 NOSIG= ¿Cuál es racha máxima del viento informado?:","it":[],"o":["29 kt.","24 kt.","14 kt.","01 kt."],"a":1,"nota":"29014G24KT: viento de 290° con 14 kt y ráfagas (G) de 24 kt."},{"n":19,"t":"Normativa","q":"En qué condiciones se exceptúan el control manual del RPA según la norma DAN 151:","it":["Operaciones especiales con fines fotogramétricos.","Operaciones de vigilancia aérea nocturna.","Aspersión agrícola.","Operaciones con sensores LIDAR o similares."],"o":["Solo II y IV.","Solo I, II y IV.","Solo I, III, IV.","I, II, III y IV."],"a":2,"nota":"DAN 151 Ed. 3 (2024), 151.103 e: fotogrametría, aspersión agrícola y Lidar. La vigilancia nocturna no es excepción."},{"n":20,"t":"Aerodinámica","q":"En un vuelo recto y nivelado, sin aceleración o deceleración, las fuerzas que están equilibradas son:","it":[],"o":["La sustentación igual al empuje.","La sustentación distinta al empuje.","La sustentación distinta al peso.","La sustentación igual al peso."],"a":3,"nota":""},{"n":21,"t":"Normativa","q":"Es la operación en la cual la tripulación remota mantiene contacto visual directo con la aeronave para dirigir su vuelo y satisfacer las responsabilidades de separación y anticolisión”.","it":[],"o":["Operación de vuelo.","Operación con visibilidad directa visual (VLOS).","Operación más allá de la visibilidad directa visual (BVLOS).","Operación visual."],"a":1,"nota":""},{"n":22,"t":"Normativa","q":"“Espacio aéreo de dimensiones definidas sobre el territorio o las aguas jurisdiccionales de chile dentro del cual está prohibido el vuelo de aeronaves por razones de seguridad nacional”. se denomina:","it":[],"o":["Zona restringida.","Zona peligrosa.","Zona insegura.","Zona prohibida."],"a":3,"nota":""},{"n":23,"t":"Meteorología","q":"Gradiente vertical de temperatura se define como:","it":[],"o":["La variación de la temperatura con la altura.","El cambio de temperatura a lo largo del día.","La variación de presión con la temperatura.","El cambio de la dirección del viento."],"a":0,"nota":""},{"n":24,"t":"METAR","q":"La abreviatura BCFG usada en claves meteorológicas del METAR significa:","it":[],"o":["Niebla.","Niebla baja.","Niebla en la vecindad.","Niebla en bancos."],"a":3,"nota":""},{"n":25,"t":"Normativa","q":"La altura máxima de operación de un RPA según la DAN 151 es:","it":[],"o":["400 pies.","400 mts.","450 pies.","120 pies."],"a":0,"nota":"DAN 151 Ed. 3 (2024): 400 pies (120 m) en VLOS."},{"n":26,"t":"Normativa","q":"La autorización emitida por la DGAC para operar en áreas pobladas según la DAN 151 tiene una validez de _________ meses:","it":[],"o":["6.","2.","3.","12."],"a":0,"nota":"DAN 151 Ed. 3 (2024), 151.101 b: validez de hasta 6 meses."},{"n":27,"t":"Meteorología","q":"La brisa marina está originada por:","it":[],"o":["El oleaje del mar.","El amanecer y el atardecer del día.","La mayor humedad de la superficie del mar.","La diferencia térmica entre el mar y la tierra."],"a":3,"nota":""},{"n":28,"t":"Meteorología","q":"La capa de la atmósfera en la cual se desarrollan las actividades de los RPAS, se denomina:","it":[],"o":["Estratosfera.","Tropósfera.","Tropopausa.","Exosfera."],"a":1,"nota":""},{"n":29,"t":"Normativa","q":"La credencial de RPA permite al portador:","it":[],"o":["Desempeñarse como operador de RPAS solo en condiciones (VLOS).","Desempeñarse como operador de RPAS en condición (BVLOS)","Desempeñarse como operador de RPAS en cualquier condición.","A) y b)."],"a":0,"nota":"DAN 151 Ed. 3 (2024), 151.305."},{"n":30,"t":"Normativa","q":"La definición de “áreas pobladas” es:","it":[],"o":["Zonas destinadas para espectáculos de congregación masiva de personas.","Zonas en las que se desarrollen actividades que convoquen la aglomeración de personas al aire libre.","Terrenos destinados para ser habitados por poblaciones humanas.","Zonas en las que existan centros urbanos o se desarrollen actividades que convoquen la aglomeración de personas al aire libre."],"a":3,"nota":""},{"n":31,"t":"Normativa","q":"La definición de nivel aceptable de seguridad operacional (ALOS)","it":[],"o":["Nivel o criterio establecido fuera del intervalo normal de funcionamiento o fuera de la región de control que dispara una alerta indicando la necesidad de una evaluación o un ajuste.","Nivel mínimo de rendimiento en materia de seguridad operacional expresado en términos de objetivos e indicadores de seguridad operaciones.","Responde al análisis permanente de los acontecimientos en desarrollo al interior del proveedor de servicios aeronáuticos.","Son los objetivos de mediano y largo plazo, establecidos en términos numéricos y que se relacionan con el nivel aceptable de la seguridad operacional."],"a":1,"nota":""},{"n":32,"t":"Normativa","q":"La definición: “persona designada por el explotador para operar los controles de vuelo de una aeronave pilotada a distancia durante el tiempo de vuelo. a falta de persona designada, se presumirá que el piloto es quien dirige la operación de vuelo”, corresponde al concepto de:","it":[],"o":["Piloto.","Explorador.","Piloto a distancia.","Explotador a distancia."],"a":2,"nota":""},{"n":33,"t":"Normativa","q":"La definición: “una operación durante la cual una aeronave pilotada a distancia vuela sin intervención de piloto en la gestión de vuelo”, corresponde al concepto de:","it":[],"o":["Operación restringida.","Operación con visibilidad directa visual.","Operación en gestión de vuelo.","Operación autónoma."],"a":3,"nota":""},{"n":34,"t":"Meteorología","q":"La dirección de la brisa marina por la noche es:","it":[],"o":["Del mar hacia la tierra.","Paralelo a la costa.","Relativa.","De la tierra hacia el mar."],"a":3,"nota":""},{"n":35,"t":"Aerodinámica","q":"La fuerza aerodinámica es:","it":[],"o":["La fuerza paralela al viento relativo.","La fuerza resultante de la sustentación y la resistencia inducida.","La fuerza resultante de la fuerza centrífuga y el peso.","La fuerza resultante de la sustentación y el peso de la aeronave."],"a":1,"nota":""},{"n":36,"t":"Aerodinámica","q":"La fuerza en dirección perpendicular hacia la superficie de la tierra se denomina:","it":[],"o":["Empuje o tracción.","Sustentación.","Peso o gravedad.","Resistencia."],"a":2,"nota":""},{"n":37,"t":"Meteorología","q":"La niebla se forma cuando:","it":[],"o":["Existe aire húmedo y gran densidad.","Las nubes descienden hasta el nivel del suelo.","El aire se enfría por debajo de su punto de rocío.","El aire se calienta por encima de su punto de rocío."],"a":2,"nota":"Ojo: la 37 y la 38 son la misma pregunta; solo cambia la opción d."},{"n":38,"t":"Meteorología","q":"La niebla se forma cuando:","it":[],"o":["Existe aire húmedo y gran densidad.","Las nubes descienden hasta el nivel del suelo.","El aire se enfría por debajo de su punto de rocío.","Las nubes se enfrían por debajo de su punto de rocío."],"a":2,"nota":"Ojo: la 37 y la 38 son la misma pregunta; solo cambia la opción d."},{"n":39,"t":"Meteorología","q":"La nube más peligrosa para desarrollar el vuelo es:","it":[],"o":["NS.","CB.","SC.","CI."],"a":1,"nota":""},{"n":40,"t":"Aerodinámica","q":"La resistencia inducida es:","it":[],"o":["La que se produce debido a la sustentación.","La que proporciona mayor velocidad.","La suma de la gravedad más la resistencia parásita.","La que se produce debido al peso de la aeronave."],"a":0,"nota":""},{"n":41,"t":"Meteorología","q":"Las causas principales que originan las turbulencias son:","it":[],"o":["Corrientes convectivas.","Obstrucciones al flujo del viento.","Cortante del viento.","Todas las anteriores."],"a":3,"nota":""},{"n":42,"t":"Aerodinámica","q":"La sustentación es:","it":[],"o":["La fuerza hacia arriba perpendicular al viento relativo y desarrollada para soportar el peso de la aeronave.","La fuerza aerodinámica, más la resistencia parásita.","La fuerza perpendicular al viento relativo y desarrollada para realizar la tracción de la aeronave.","La fuerza aerodinámica que soporta el peso de la aeronave."],"a":0,"nota":""},{"n":43,"t":"Meteorología","q":"La temperatura a la cual se alcanza el punto de saturación del vapor de agua, se denomina:","it":[],"o":["Punto de saturación.","Punto de rocío.","Temperatura de ebullición.","Temperatura de saturación."],"a":1,"nota":""},{"n":44,"t":"Meteorología","q":"La temperatura de la atmósfera estándar a nivel del mar es de:","it":[],"o":["25º C.","15º C.","50º C.","0° C."],"a":1,"nota":""},{"n":45,"t":"Meteorología","q":"La turbulencia mecánica se crea:","it":[],"o":["Por las térmicas de calor.","Por las ráfagas de viento.","Por el rozamiento del aire con la superficie.","Por la relación entre ráfagas de viento y térmicas de calor."],"a":2,"nota":""},{"n":46,"t":"Normativa","q":"Mencione las sanciones establecidas en el Código Aeronáutico, Art 185.","it":["Amonestación escrita.","Multas de 5 a 500 ingresos mínimos.","Suspensión de permisos y licencias hasta por 3 años.","Cancelación definitiva de permisos o licencia."],"o":["Solo I, II y IV.","Solo II y IV.","Solo I, II y III.","I, II, III y IV."],"a":3,"nota":""},{"n":47,"t":"METAR","q":"METAR de Valdivia SCVD 211400Z 12003KT 0500 VCDG BKN 020 04/03 Q1026 NOSIG, la temperatura del punto de rocío es:","it":[],"o":["5 grados.","4 grados.","3 grados.","Ninguna de las anteriores."],"a":2,"nota":"04/03 = temperatura 4 °C y punto de rocío 3 °C. (El banco trae un error de tipeo: \"VCDG\" en vez de VCFG)."},{"n":48,"t":"METAR","q":"METAR de Valdivia SCVD 211400Z 12003KT 0500 VCFG BKN 020 04/03 Q1026 NOSIG, la visibilidad es de:","it":[],"o":["1400 metros.","500 metros.","0.5 MN.","Ninguna de las anteriores."],"a":1,"nota":"0500 = 500 metros de visibilidad."},{"n":49,"t":"METAR","q":"METAR de Valdivia SCVD 211400Z 12003KT 4000 VCFG BKN 020 04/03 Q1026 NOSIG, la dirección e intensidad del viento es:","it":[],"o":["020 grados con 04 nudos.","211 grados con 40 nudos.","120 grados con 03 nudos.","040 grados con 03 nudos."],"a":2,"nota":"12003KT = viento de 120° con 3 nudos."},{"n":50,"t":"Normativa","q":"Ninguna aeronave pilotada a distancia se utilizará sobre el _____ de otro estado sin la previa ______ especial concedida por el estado en el que se efectuará el vuelo.","it":[],"o":["Derecho, convalidación.","Territorio, convalidación.","Derecho, autorización.","Territorio, autorización."],"a":3,"nota":""},{"n":51,"t":"Normativa","q":"No se podrá operar un RPA a:","it":[],"o":["Menos de 2,5 km de la línea del eje de la pista y a 2 km paralelo al eje de la pista de un aeródromo.","Menos de 1 km de la línea del eje de la pista y a 500 m paralelo al eje de la pista de un aeródromo.","Menos de 1,5 km de la línea del eje de la pista y a 1 km paralelo al eje de la pista de un aeródromo.","A menos de 2 kilómetros de la prolongación del eje de la pista, medidos desde el umbral y a una distancia menor de 1 kilómetro paralelo al eje de la pista de un aeródromo."],"a":3,"nota":""},{"n":52,"t":"Normativa","q":"Para la correcta planificación de un vuelo de RPAS, el operador entre otras condiciones deberá:","it":["Verificar plataforma IFIS, en lo particular si existen NOTAMS vigentes en la zona a sobrevolar.","Verificar las condiciones meteorológicas a través de METAR.","Verificar los aeródromos públicos y privados cercanos a la zona de vuelo los cuales deben ser informados en la solicitud de vuelo lo anterior en función de la mitigación de riesgos operacionales.","Avisar a la municipalidad del área a operar."],"o":["Solo I y IV.","Solo I, II y IV.","Solo I, II y III.","I, II, III y IV."],"a":2,"nota":""},{"n":53,"t":"Normativa","q":"Para la obtención y revalidación de la credencia se deberá aprobar un examen escrito sobre las siguientes materias","it":[],"o":["DAN 151, DAN 91, NOTAMS, meteorología y aerodinámica.","DAN 151, meteorología, aerodinámica y operaciones aéreas.","DAN 151, MOTAMS, meteorología y operaciones aérea.","DAN 151, DAN 91, meteorología, aerodinámica y operaciones aéreas."],"a":0,"nota":"DAN 151 Ed. 3 (2024), 151.303 c: el examen cubre DAN 151, DAN 91, NOTAM, METAR y aerodinámica. La opción a es la que calza con la norma (en tu hoja se marcaba la d)."},{"n":54,"t":"Meteorología","q":"Para que la formación de niebla sea probable, debe existir:","it":[],"o":["Nubes en altura y corrientes descendentes de aire húmedo.","Fuerte viento y alta humedad relativa a nivel del suelo.","Alta humedad, temperatura y punto de rocío próximo y viento en calma.","Nubes en altura y fuerte viento."],"a":2,"nota":""},{"n":55,"t":"Normativa","q":"Para un vuelo de carácter recreacional en área poblada no se requiere permiso de la DGAC.","it":[],"o":["Si la aeronave es de polietileno expandido y/o material equivalente no importando su peso.","Si la aeronave es de polietileno expandido y/o material equivalente sólo si el peso máximo de la aeronave es de 750 gramos.","Sólo si la aeronave es de polietileno expandido (plumavit).","Solo si pes menos de 750 gramos."],"a":1,"nota":"Respuesta según el material de estudio; no figura en el texto de la DAN 151."},{"n":56,"t":"Meteorología","q":"¿Qué es necesario para que se produzcan precipitaciones?","it":[],"o":["Que la temperatura ambiente sea elevada.","Que la presión atmosférica sea alta.","Que el aire esté saturado.","Que el aire esté contaminado."],"a":2,"nota":""},{"n":57,"t":"Normativa","q":"¿Qué se entiende por seguridad operacional?","it":[],"o":["Seguridad operacional es el estado en que el riesgo de lesiones a las personas o daños a los bienes se reduce y se mantiene en un nivel aceptable, o por debajo del mismo, por medio de un proceso continuo de identificación de peligros y gestión de riesgos.”","Seguridad operacional es el estado en que el riesgo de lesiones a las personas se aumenta y no se mantiene en un nivel aceptable, que se realiza por medio de un proceso discontinuo de identificación de peligros y gestión de riesgos.”","Es un concepto que solo se ocupa en chile, respecto a la seguridad de las aeronaves.","Parámetro de seguridad basado en datos que se utiliza para observar y evaluar el rendimiento en materia de riesgo operacional."],"a":0,"nota":""},{"n":58,"t":"Normativa","q":"Quién es el responsable de la conducción segura de las operaciones de acuerdo con la normativa DAN 151:","it":[],"o":["El explotador.","El dueño de la empresa.","La DGAC.","El piloto a distancia."],"a":3,"nota":"DAN 151 Ed. 3 (2024), 151.103 b: el piloto a distancia es el responsable de la conducción segura."},{"n":59,"t":"Meteorología","q":"Se define como ráfaga:","it":[],"o":["El valor de la intensidad del viento cuando es constante.","La turbulencia creada por la intensidad del viento.","La turbulencia creada al sotavento de una montaña.","El valor máximo de la intensidad del viento cuando no es constante."],"a":3,"nota":""},{"n":60,"t":"Meteorología","q":"Se dice que el aire está saturado cuando:","it":[],"o":["No se puede comprimir más.","No admite mayor cantidad de vapor de agua.","Su tensión de vapor es mínima.","Presenta máxima densidad."],"a":3,"nota":""},{"n":61,"t":"Meteorología","q":"Se dice que el viento es constante cuando:","it":[],"o":["Unas veces lleva un sentido y en otras ocasiones otro.","Su acción es constante y en la misma dirección.","Su acción es constante, pero puede variar su dirección.","Se desplaza en una sola dirección."],"a":1,"nota":""},{"n":62,"t":"Normativa","q":"Según la norma DAN 151, Cual es la información técnica que debe entregar el propietario de un RPA para inscribir la aeronave:","it":["Fabricante, país.","Marca modelo y número de serie.","Color y tipo de material de la aeronave.","Peso de fábrica."],"o":["Solo I y II.","Solo I, II y III.","Solo I, II y IV.","I, II, III y IV."],"a":1,"nota":"DAN 151 Ed. 3 (2024), 151.203: no se pide color ni material."},{"n":63,"t":"Normativa","q":"Según la norma DAN 151, la duración de la credencial de operador de RPA será de:","it":[],"o":["12 meses.","24 meses.","36 meses.","6 meses."],"a":2,"nota":"DAN 151 Ed. 3 (2024), 151.307 a."},{"n":64,"t":"Normativa","q":"Según la norma DAN 151 uno de los requisitos para la obtención de la credencial de operador de RPAS es:","it":[],"o":["Tener menos de 18 años.","Aprobar el examen escrito solo de materias de la normativa aeronáutica.","Presentar una declaración jurada simple firmada manualmente que incluya huella digital de la persona que suscribe de haber recibido instrucción teórica y práctica de acuerdo al formulario del apéndice c de la norma, acompañado del respectivo certificado de la empresa que impartió la instrucción.","Obtener una calificación mínima de aprobación de los exámenes de 70%."],"a":2,"nota":"DAN 151 Ed. 3 (2024), 151.303. (La d es falsa: el mínimo es 75%, no 70%)."},{"n":65,"t":"Normativa","q":"Según la norma DAN 151 un piloto a distancia durante la operación de un RPA no podrá:","it":["Operar más de un RPA en forma simultanea","Operar bajo la influencia de las drogas o el alcohol","Operar en áreas donde se combate un incendio por medio de aeronaves tripuladas","Operar a una distancia de 1 km de la prolongación del eje de pista, desde el umbral y a una distancia de 2 km paralelo del eje de la pista."],"o":["Solo I, II y III.","Solo II, III y IV","Solo I, III y IV","I, II, III y IV."],"a":2,"nota":"El ítem IV trae las distancias invertidas respecto a la norma (2 km de la prolongación del eje y 1 km paralelo), pero d es la respuesta esperada."},{"n":66,"t":"Normativa","q":"Según la norma DAN 151 un piloto a distancia durante la operación de un RPA podrá:","it":[],"o":["Operar en zonas prohibidas y zonas peligrosas publicadas por la DGAC.","Operar en zonas restringidas, sin autorización de la DGAC.","Operar en la noche con una autorización especial de la DGAC.","Operar sin tomar conocimiento de los NOTAMS vigentes publicados por la DGAC."],"a":3,"nota":"DAN 151 Ed. 3 (2024), 151.103 g-10."},{"n":67,"t":"METAR","q":"Según la siguiente información de concepción: METAR SCIE 161500Z 02005KT CAVOK 12/07 q1018= la abreviatura CAVOK determina que la visibilidad, el tiempo presente y las nubes son respectivamente:","it":[],"o":["Ilimitada; sin precipitaciones; sin CB ni nubes bajo la altitud mínima del sector.","Superior a 5 km; despejado; sin CB.","Superior a 10 km; no hay CB ni nubes bajo 1500 mts. (5000 pies)","Ilimitada y despejado."],"a":2,"nota":"CAVOK: visibilidad de 10 km o más, sin CB ni nubes bajo 1500 m (5000 pies) y sin fenómenos significativos."},{"n":68,"t":"METAR","q":"Según la siguiente información del aeródromo de atacama: METAR SCAT 161500Z 20008KT 180V240 7000 SKC 15/09 q 1019= los datos de viento informado son:","it":[],"o":["230 grados con 3 nudos y arrachado.","Calma, cambiando a variable.","200 grados con 8 nudos, fluctuando entre los 180 grados y los 240 grados.","200 grados con 3 nudos y variable."],"a":2,"nota":""},{"n":69,"t":"METAR","q":"Según la siguiente información del aeródromo Rodelillo: METAR SCRD 151700Z VRB01KT 0400 FG OVC002 15/15 Q1015= el fenómeno que reduce la visibilidad y el techo son respectivamente:","it":[],"o":["Niebla y 200 pies.","Niebla y 600 metros.","Neblina y 20 metros.","Humo y 200 pies."],"a":2,"nota":"FG = niebla; OVC002 = cubierto a 200 pies."},{"n":70,"t":"METAR","q":"Según los siguientes datos de Antofagasta: METAR SCFA 141200Z VRB02KT 9999 NCS 12/11 Q1015 NOSIG= la visibilidad y la nubosidad reportadas son respectivamente:","it":[],"o":["Superior a 10 km y no significativa.","Inferior a 10 km y escasa.","Reducida y abundante.","9 km y despejado."],"a":0,"nota":"9999 = 10 km o más; NSC = nubosidad no significativa (el banco escribe \"NCS\")."},{"n":71,"t":"Aerodinámica","q":"Si aumentamos el ángulo de ataque en un perfil alar, la sustentación:","it":[],"o":["Aumentará.","Disminuirá.","Se mantendrá igual.","No cambia."],"a":0,"nota":""},{"n":72,"t":"Normativa","q":"Si un ciudadano o ciudadana se siente vulnerado en su privacidad en intimidad por la presencia y/o sobrevuelo de un RPAS, a quienes se puede recurrir para denunciar este hecho:","it":[],"o":["Seguridad pública de la comuna correspondiente inspectores municipales.","Policía de investigaciones.","Carabineros de Chile y la denuncia al Juzgado de Policía Local.","Solo a la DGAC."],"a":0,"nota":""},{"n":73,"t":"Normativa","q":"Toda aeronave piloteada a distancia, previo a realizar cualquier operación de vuelo, deberá contar con la autorización:","it":[],"o":["Del Departamento Aeródromos y Servicios Aeronáuticos.","De la Junta Aeronáutica Civil.","De la Dirección General de Aeronáutica Civil.","De la Fuerza Aérea de Chile."],"a":2,"nota":""},{"n":74,"t":"Normativa","q":"Toda persona que se encuentre operando un RPA deberá portar:","it":[],"o":["Registro del RPA, póliza de seguro o resolución de la JAC, autorización de la DGAC, certificado AOC o CEO y las respectiva EEOO (especificación de las operaciones).","Solo la autorización de operación de RPAS otorgada por la DGAC.","Registro del RPA, credencial de operador RPAS, póliza de seguro o resolución de la JAC, autorización de la DGAC, certificado AOC o CEO y las respectiva EEOO (especificación de las operaciones)","Registro del RPA, credencial de operador RPAS, autorización de la DGAC, certificado AOC o CEO y las respectiva EEOO (especificación de las operaciones)."],"a":2,"nota":""},{"n":75,"t":"Normativa","q":"Tras un reclamo de un ciudadano o ciudadana, bajo qué circunstancia se podría requisar el RPA al operador.","it":[],"o":["Si la DGAC lo estima conveniente a través de su Departamento Jurídico.","Si lo sorprende Carabineros de Chile.","Sólo tras la autorización del fiscal o la fiscal al funcionario policial, sólo si estamos ante la presencia de un hecho que pudiese ser constitutivo de delito.","Solo por un inspector de la DGAC."],"a":2,"nota":""},{"n":76,"t":"Normativa","q":"Un operador de RPA podrá operar en áreas restringidas:","it":[],"o":["Cuando lo estime necesario.","Cuando cuente con autorización de la autoridad competente.","Cuando cuente con autorización de la Torre de Control.","Cuando esté en una situación de emergencia."],"a":1,"nota":""},{"n":77,"t":"Normativa","q":"Un vuelo de carácter recreacional lo podemos ejecutar en:","it":[],"o":["En la vía pública con cualquier RPA y sin autorización de la DGAC.","En la vía pública con permiso de la DGAC y con cualquier modelo de RPA.","En zona no poblada, con la autorización formal de la DGAC hasta 400 pies.","En lugar privado y siempre que no opere a más de 50 metros de altura y con un peso inferior a 750 grs."],"a":3,"nota":"Respuesta según el material de estudio."},{"n":78,"t":"Aerodinámica","q":"Viento relativo es:","it":[],"o":["El formado por la hélice al pasar por el perfil alar.","La corriente de aire que sigue a la aeronave en su trayectoria.","La corriente o flujo de aire moviéndose hacia el perfil, siendo opuesto a la trayectoria de vuelo.","El formado por el aspa al pasar por el perfil alar."],"a":2,"nota":""},{"n":79,"t":"Normativa","q":"Zona peligrosa (D) es:","it":[],"o":["Espacio aéreo de dimensiones definidas sobre el territorio o las aguas jurisdiccionales de chile, dentro del cual está prohibido el vuelo de aeronaves por razones de seguridad nacional.","Espacio aéreo de dimensiones definidas en el cual pueden desplegarse en determinados momentos actividades peligrosas para el vuelo de las aeronaves.","Espacio aéreo de dimensiones definidas sobre el territorio o las aguas jurisdiccionales de chile, dentro del cual está restringido el vuelo de las aeronaves de acuerdo con determinadas condiciones especificadas.","Ninguna de las anteriores."],"a":1,"nota":""}];
+const TEMAS = ["Todos","Normativa","Aerodinámica","Meteorología","METAR"];
+const L = "abcdefgh";
+const store = {
+  get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+let mode="practica", tema="Todos", cant=20;
+let S=null; // sesión
+
+const $=id=>document.getElementById(id);
+function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function fmtStem(s){return esc(s).replace(/(METAR\s+[A-Z]{4}[^=]*?=?)(?=\s+(la|el|los|las)\b|,|$)/i,'<code>$1</code>')}
+function pool(){return tema==="Todos"?BANK:BANK.filter(q=>q.t===tema)}
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+
+function renderHome(){
+  const errs=store.get("rpas_err",[]), best=store.get("rpas_best",null), hist=store.get("rpas_hist",0);
+  $("stats").innerHTML=[
+    [BANK.length,"preguntas en el banco"],
+    [hist,"intentos realizados"],
+    [best===null?"—":best+"%","mejor examen"],
+    [errs.length,"preguntas por repasar"]
+  ].map(([n,l])=>`<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+  $("temas").innerHTML=TEMAS.map(t=>{
+    const n=t==="Todos"?BANK.length:BANK.filter(q=>q.t===t).length;
+    return `<button class="opt" data-t="${t}" aria-pressed="${t===tema}" id="t-${t}"><b>${t}</b><small>${n} preguntas</small></button>`}).join("");
+  $("startErr").hidden=!errs.length;
+  $("startErr").textContent=`Repasar mis errores (${errs.length})`;
+  const n=pool().length;
+  $("cantHint").textContent=cant&&cant<n?`Se elegirán ${cant} preguntas al azar de ${n}.`:`Se usarán las ${n} preguntas del tema, en orden aleatorio.`;
+}
+$("modes").addEventListener("click",e=>{const b=e.target.closest("[data-mode]");if(!b)return;mode=b.dataset.mode;
+  document.querySelectorAll("#modes .opt").forEach(x=>x.setAttribute("aria-pressed",x===b))});
+$("temas").addEventListener("click",e=>{const b=e.target.closest("[data-t]");if(!b)return;tema=b.dataset.t;renderHome()});
+$("cant").addEventListener("click",e=>{const b=e.target.closest("[data-n]");if(!b)return;cant=+b.dataset.n;
+  document.querySelectorAll("#cant button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderHome()});
+
+function start(list,label){
+  S={qs:list,i:0,ans:[],mode,label};
+  $("home").hidden=true;$("result").hidden=true;$("quiz").hidden=false;$("rankPanel").hidden=true;
+  showQ();window.scrollTo(0,0);
+}
+$("start").onclick=()=>{let p=shuffle(pool());if(cant)p=p.slice(0,cant);start(p)};
+$("startErr").onclick=()=>{const e=store.get("rpas_err",[]);start(shuffle(BANK.filter(q=>e.includes(q.n))),"errores")};
+
+function showQ(){
+  const q=S.qs[S.i], tot=S.qs.length;
+  $("qpos").textContent=`Pregunta ${S.i+1} de ${tot}`;
+  const ok=S.ans.filter(a=>a.ok).length;
+  $("qscore").textContent=S.mode==="practica"?`Correctas: ${ok} / ${S.ans.length}`:`Modo examen`;
+  $("bar").style.width=(S.i/tot*100)+"%";
+  $("qnum").textContent=`Nº ${q.n} del banco`;
+  $("qtema").textContent=q.t;
+  $("qstem").innerHTML=fmtStem(q.q);
+  $("qitems").innerHTML=q.it.map(x=>`<li>${esc(x)}</li>`).join("");$("qitems").hidden=!q.it.length;
+  $("qans").innerHTML=q.o.map((o,i)=>`<button class="ans" data-i="${i}" id="a-${i}"><span class="k">${L[i]})</span><span>${esc(o)}</span></button>`).join("");
+  $("qfb").hidden=true;$("next").disabled=true;
+  $("next").textContent=S.i===tot-1?"Ver resultado":"Siguiente";
+}
+$("qans").addEventListener("click",e=>{
+  const b=e.target.closest(".ans");if(!b||b.disabled)return;
+  const q=S.qs[S.i], i=+b.dataset.i;
+  if(S.mode==="examen"){
+    document.querySelectorAll(".ans").forEach(x=>x.classList.toggle("sel",x===b));
+    S.pick=i;$("next").disabled=false;return;
+  }
+  const ok=i===q.a;
+  S.ans.push({n:q.n,pick:i,ok});
+  document.querySelectorAll(".ans").forEach(x=>{x.disabled=true;const k=+x.dataset.i;
+    if(k===q.a)x.classList.add("ok");else if(k===i)x.classList.add("bad")});
+  $("qfb").className="fb"+(ok?"":" bad");
+  $("qfb").innerHTML=`<strong>${ok?"Correcto":"Incorrecto. La respuesta es "+L[q.a]+")"}</strong>${q.nota?`<div class="note">${esc(q.nota)}</div>`:""}`;
+  $("qfb").hidden=false;$("next").disabled=false;
+  $("qscore").textContent=`Correctas: ${S.ans.filter(a=>a.ok).length} / ${S.ans.length}`;
+});
+$("next").onclick=()=>{
+  if(S.mode==="examen"){const q=S.qs[S.i];S.ans.push({n:q.n,pick:S.pick,ok:S.pick===q.a});S.pick=null}
+  S.i++; if(S.i<S.qs.length){showQ();$("qstem").scrollIntoView({block:"nearest"})} else finish();
+};
+$("quit").onclick=()=>{S=null;$("quiz").hidden=true;$("home").hidden=false;0;renderHome()};
+
+function finish(){
+  const tot=S.ans.length, ok=S.ans.filter(a=>a.ok).length, pct=Math.round(ok/tot*100);
+  // errores: agrega los fallados, quita los acertados
+  let errs=new Set(store.get("rpas_err",[]));
+  S.ans.forEach(a=>a.ok?errs.delete(a.n):errs.add(a.n));
+  store.set("rpas_err",[...errs]);
+  store.set("rpas_hist",store.get("rpas_hist",0)+1);
+  if(S.mode==="examen"&&tot>=10){const b=store.get("rpas_best",null);if(b===null||pct>b)store.set("rpas_best",pct)}
+  $("quiz").hidden=true;$("result").hidden=false;0;
+  if(S.mode==="examen"&&tot>=10)postScore(pct);
+  $("pct").textContent=pct+"%";
+  const pass=pct>=75;
+  $("verdict").className="verdict "+(pass?"pass":"fail");
+  $("verdict").textContent=pass?"Aprobado":"Reprobado";
+  $("detail").textContent=`${ok} de ${tot} correctas · se aprueba con 75%`;
+  const bad=S.ans.filter(a=>!a.ok);
+  S.lastBad=bad.map(a=>a.n);
+  $("retryErr").hidden=!bad.length;
+  $("revTitle").textContent=bad.length?`Preguntas falladas (${bad.length})`:"Sin errores. ¡Muy bien!";
+  $("review").innerHTML=bad.map(a=>{const q=BANK.find(x=>x.n===a.n);
+    return `<div class="rv"><p class="tag">Nº ${q.n} · ${q.t}</p><p><strong>${esc(q.q)}</strong></p>
+    ${q.it.length?`<ol class="items">${q.it.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}
+    <p class="you">Tu respuesta: ${a.pick==null?"sin responder":L[a.pick]+") "+esc(q.o[a.pick])}</p>
+    <p class="right">Correcta: ${L[q.a]}) ${esc(q.o[q.a])}</p>${q.nota?`<p class="sub">${esc(q.nota)}</p>`:""}</div>`}).join("");
+  window.scrollTo(0,0);
+}
+$("again").onclick=()=>{$("result").hidden=true;$("home").hidden=false;0;renderHome()};
+$("home2").onclick=$("again").onclick;
+$("retryErr").onclick=()=>start(shuffle(BANK.filter(q=>S.lastBad.includes(q.n))));
+
+/* ---------- Ranking compartido ---------- */
+const R={db:null,id:null,rows:[],canWrite:true,nick:store.get("rpas_nick","")};
+$("nick").value=R.nick;
+function drawRank(){
+  const body=$("rankBody");
+  $("rankTbl").hidden=!R.rows.length;
+  body.innerHTML="";
+  R.rows.forEach((d,i)=>{const v=d.data(),tr=document.createElement("tr");if(d.id===R.id)tr.className="me";
+    const cells=[i+1,String(v.nombre||"Sin nombre"),(v.best??"—")+"%",(v.last??"—")+"%",v.exams||0];
+    cells.forEach((c,k)=>{const td=document.createElement("td");td.textContent=c;if(k===0)td.className="pos";if(k>1)td.className="num";tr.appendChild(td)});
+    body.appendChild(tr)});
+  if(!R.db)return;
+  if(!R.canWrite)$("rankMsg").textContent="Puedes ver el ranking, pero tu acceso es de solo lectura. Pide al dueño de la página acceso de Colaborador para aparecer.";
+  else $("rankMsg").textContent=R.rows.length?`${R.rows.length} participante${R.rows.length>1?"s":""}. Rinde un examen para sumar tu puntaje.`:"Todavía nadie aparece. Escribe tu nombre y rinde un examen de 10 o más preguntas para ser el primero.";
+}
+async function postScore(pct){
+  if(!R.db||!R.id||!R.canWrite)return;
+  if(!R.nick){$("rankMsg").textContent="Escribe tu nombre en el ranking para que se guarde tu puntaje.";return}
+  const ref=R.db.collection("ranking").doc(R.id);
+  try{
+    const cur=await ref.get(); const v=cur.exists?cur.data():{};
+    await ref.set({nombre:R.nick,best:Math.max(v.best??0,pct),last:pct,exams:(v.exams||0)+1,updatedAt:Date.now()});
+  }catch(e){if(e&&e.code==="invalid_argument"){R.canWrite=false;$("nameForm").hidden=true;drawRank()}}
+}
+$("nameForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const n=$("nick").value.trim().slice(0,24); if(!n)return;
+  R.nick=n; store.set("rpas_nick",n);
+  if(R.db&&R.id&&R.canWrite){const ref=R.db.collection("ranking").doc(R.id);
+    try{const cur=await ref.get();if(cur.exists){await ref.update({nombre:n,updatedAt:Date.now()})}
+      $("rankMsg").textContent=cur.exists?"Nombre actualizado.":"Nombre guardado. Aparecerás en el ranking cuando rindas tu primer examen.";}
+    catch(err){if(err&&err.code==="invalid_argument"){R.canWrite=false;$("nameForm").hidden=true;drawRank()}}}
+});
+if(window.claude&&window.claude.use)(async()=>{
+  const [db,user]=await Promise.all([claude.use("db"),claude.use("user")]);
+  if(!db){$("rankMsg").textContent="El ranking necesita que inicies sesión en Claude. Igual puedes practicar sin aparecer.";return}
+  R.db=db; R.id=user?await user.id():null;
+  if(user){const w=await user.can("data.write"); if(w===false&&!(await user.isOwner()))R.canWrite=false}
+  $("nameForm").hidden=!(R.id&&R.canWrite);
+  db.collection("ranking").orderBy("best","desc").limit(100).onSnapshot(snap=>{R.rows=snap.docs.filter(d=>d.exists);drawRank()},
+    ()=>{$("rankMsg").textContent="No se pudo cargar el ranking. Recarga la página para intentar de nuevo."});
+  drawRank();
+})();
+renderHome();
+</script>
+</body></html>
