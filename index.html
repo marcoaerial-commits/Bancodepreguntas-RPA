@@ -185,7 +185,7 @@ ol.items li{margin:2px 0}
         <input id="mailTo" type="email" inputmode="email" autocomplete="email" placeholder="tucorreo@gmail.com">
         <button class="btn" type="submit" id="mailBtn">Enviar a mi correo</button>
       </form>
-      <p class="hint" style="margin:0">Se abre tu app de correo con el resumen completo: nota, cada pregunta, tu respuesta y la correcta. Solo toca Enviar.</p>
+      <p class="hint" style="margin:0">Te llega un correo desde simuladorrpa@gmail.com con tu nota, cada pregunta, tu respuesta y la correcta.</p>
       <div class="row" style="margin-top:8px"><button class="btn ghost" type="button" id="copyBtn">Copiar resumen</button><span class="hint" id="copyMsg" style="margin:0"></span></div>
     </div>
     <h2 style="margin-top:24px" id="revTitle">Preguntas falladas</h2>
@@ -294,6 +294,7 @@ function finish(){
   const bad=S.ans.filter(a=>!a.ok);
   S.lastBad=bad.map(a=>a.n);
   S.summary=buildSummary(pct,ok,tot,pass);
+  $("mailBtn").disabled=false;$("mailBtn").textContent="Enviar a mi correo";$("copyMsg").textContent="";
   $("retryErr").hidden=!bad.length;
   $("revTitle").textContent=bad.length?`Preguntas falladas (${bad.length})`:"Sin errores. ¡Muy bien!";
   $("review").innerHTML=bad.map(a=>{const q=BANK.find(x=>x.n===a.n);
@@ -323,9 +324,27 @@ function buildSummary(pct,ok,tot,pass){
   return lines.join("\n");
 }
 try{const m=localStorage.getItem("rpas_mail");if(m)document.getElementById("mailTo").value=m}catch(e){}
-document.getElementById("mailForm").addEventListener("submit",e=>{
+const MAIL_URL = "https://script.google.com/macros/s/AKfycbzT5Gh686I3e7Um9ziWgjJTwsPj3ny91gR98MnwYIoY4ejOQvUPzn0CTKAM2I-M_ngL0A/exec";  // URL de la app web de Google Apps Script (simuladorrpa@gmail.com)
+document.getElementById("mailForm").addEventListener("submit",async e=>{
   e.preventDefault(); if(!S||!S.summary)return;
   const to=$("mailTo").value.trim(); try{if(to)localStorage.setItem("rpas_mail",to)}catch(e){}
+  if(MAIL_URL){
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)){$("copyMsg").textContent="Escribe un correo válido, por ejemplo nombre@gmail.com.";$("mailTo").focus();return}
+    const items=S.ans.map(a=>{const q=BANK.find(x=>x.n===a.n);return {n:q.n,t:q.t,q:q.q,it:q.it,ok:a.ok,
+      pickTxt:a.pick==null?"":L[a.pick]+") "+q.o[a.pick],correctTxt:L[q.a]+") "+q.o[q.a],nota:q.nota||""}});
+    const ok=S.ans.filter(a=>a.ok).length;
+    $("mailBtn").disabled=true;$("mailBtn").textContent="Enviando…";$("copyMsg").textContent="";
+    try{
+      await fetch(MAIL_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},
+        body:JSON.stringify({to,mode:S.mode,pct:Math.round(ok/S.ans.length*100),ok,tot:S.ans.length,items})});
+      $("mailBtn").textContent="Enviado ✔";
+      $("copyMsg").textContent=`Listo. En un minuto te llega a ${to}. Si no lo ves, revisa la carpeta de spam.`;
+    }catch(err){
+      $("mailBtn").disabled=false;$("mailBtn").textContent="Enviar a mi correo";
+      $("copyMsg").textContent="No se pudo enviar. Revisa tu conexión a internet e inténtalo de nuevo.";
+    }
+    return;
+  }
   const subj=`Resultado simulador RPAS: ${$("pct").textContent} - ${$("verdict").textContent}`;
   location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(S.summary)}`;
 });
