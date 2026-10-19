@@ -93,6 +93,8 @@ ol.items li{margin:2px 0}
 .namebox{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
 .namebox input{flex:1 1 180px;min-width:0;font:inherit;padding:10px 12px;border:2px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
 .namebox input:focus-visible{outline:3px solid var(--signal);outline-offset:1px}
+.mailbox{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .msg{font-size:.88rem;color:var(--muted);margin:0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 [hidden]{display:none!important}body{margin:0}</style></head><body>
@@ -175,6 +177,16 @@ ol.items li{margin:2px 0}
       <button class="btn" id="again">Nuevo intento</button>
       <button class="btn ghost" id="retryErr">Repasar errores</button>
       <button class="btn ghost" id="home2">Inicio</button>
+    </div>
+    <div class="mailbox" id="mailBox">
+      <p class="tag" style="margin:0">Enviar el resultado a mi correo</p>
+      <form class="namebox" id="mailForm" style="margin:6px 0 4px">
+        <label for="mailTo" class="sr">Tu correo</label>
+        <input id="mailTo" type="email" inputmode="email" autocomplete="email" placeholder="tucorreo@gmail.com">
+        <button class="btn" type="submit" id="mailBtn">Enviar a mi correo</button>
+      </form>
+      <p class="hint" style="margin:0">Se abre tu app de correo con el resumen completo: nota, cada pregunta, tu respuesta y la correcta. Solo toca Enviar.</p>
+      <div class="row" style="margin-top:8px"><button class="btn ghost" type="button" id="copyBtn">Copiar resumen</button><span class="hint" id="copyMsg" style="margin:0"></span></div>
     </div>
     <h2 style="margin-top:24px" id="revTitle">Preguntas falladas</h2>
     <div class="review" id="review"></div>
@@ -281,6 +293,7 @@ function finish(){
   $("detail").textContent=`${ok} de ${tot} correctas · se aprueba con 75%`;
   const bad=S.ans.filter(a=>!a.ok);
   S.lastBad=bad.map(a=>a.n);
+  S.summary=buildSummary(pct,ok,tot,pass);
   $("retryErr").hidden=!bad.length;
   $("revTitle").textContent=bad.length?`Preguntas falladas (${bad.length})`:"Sin errores. ¡Muy bien!";
   $("review").innerHTML=bad.map(a=>{const q=BANK.find(x=>x.n===a.n);
@@ -293,6 +306,35 @@ function finish(){
 $("again").onclick=()=>{$("result").hidden=true;$("home").hidden=false;0;renderHome()};
 $("home2").onclick=$("again").onclick;
 $("retryErr").onclick=()=>start(shuffle(BANK.filter(q=>S.lastBad.includes(q.n))));
+
+/* ---------- Resumen por correo ---------- */
+function buildSummary(pct,ok,tot,pass){
+  const d=new Date(), f=d.toLocaleDateString("es-CL")+" "+d.toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"});
+  const lines=[`SIMULADOR CREDENCIAL RPAS (Banco DGAC marzo 2026)`,`Fecha: ${f}`,`Modo: ${S.mode==="examen"?"Examen":"Práctica"}`,
+    `Resultado: ${pct}% (${ok} de ${tot} correctas) - ${pass?"APROBADO":"REPROBADO"} (se aprueba con 75%)`,"",
+    "DETALLE DE RESPUESTAS","----------------------"];
+  S.ans.forEach((a,i)=>{const q=BANK.find(x=>x.n===a.n);
+    lines.push("",`${i+1}. [${a.ok?"OK":"ERROR"}] Pregunta Nº ${q.n} (${q.t})`,q.q);
+    q.it.forEach((t,k)=>lines.push(`   ${["I","II","III","IV","V"][k]}. ${t}`));
+    lines.push(`   Tu respuesta: ${a.pick==null?"sin responder":L[a.pick]+") "+q.o[a.pick]}`);
+    if(!a.ok)lines.push(`   Correcta: ${L[q.a]}) ${q.o[q.a]}`);
+    if(!a.ok&&q.nota)lines.push(`   Nota: ${q.nota}`);});
+  lines.push("","Respuestas de normativa según DAN 151 Ed. 3 (2024).");
+  return lines.join("\n");
+}
+try{const m=localStorage.getItem("rpas_mail");if(m)document.getElementById("mailTo").value=m}catch(e){}
+document.getElementById("mailForm").addEventListener("submit",e=>{
+  e.preventDefault(); if(!S||!S.summary)return;
+  const to=$("mailTo").value.trim(); try{if(to)localStorage.setItem("rpas_mail",to)}catch(e){}
+  const subj=`Resultado simulador RPAS: ${$("pct").textContent} - ${$("verdict").textContent}`;
+  location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(S.summary)}`;
+});
+$("copyBtn").onclick=async()=>{
+  if(!S||!S.summary)return;
+  try{await navigator.clipboard.writeText(S.summary);$("copyMsg").textContent="Resumen copiado. Pégalo en un correo o en WhatsApp."}
+  catch(e){const t=document.createElement("textarea");t.value=S.summary;document.body.appendChild(t);t.select();
+    try{document.execCommand("copy");$("copyMsg").textContent="Resumen copiado."}catch(_){$("copyMsg").textContent="No se pudo copiar en este navegador."}t.remove()}
+};
 
 /* ---------- Ranking compartido ---------- */
 const R={db:null,id:null,rows:[],canWrite:true,nick:store.get("rpas_nick","")};
