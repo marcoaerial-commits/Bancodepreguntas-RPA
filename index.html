@@ -101,6 +101,27 @@ ol.items li{margin:2px 0}
 .tp .bar::after{content:"";position:absolute;left:75%;top:-3px;bottom:-3px;border-left:2px dashed var(--muted);opacity:.6}
 .tp .v{font-size:.88rem;color:var(--muted);min-width:6.5em;text-align:right}
 .tp .v b{color:var(--ink)}
+
+.tabs{display:flex;gap:6px;border-bottom:2px solid var(--line)}
+.tabs button{font:600 1rem var(--display);letter-spacing:.08em;text-transform:uppercase;background:transparent;color:var(--muted);border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:10px 14px;cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.mchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.mchips button{font:600 .85rem var(--display);letter-spacing:.06em;text-transform:uppercase;border:2px solid var(--line);background:var(--panel);color:var(--ink);border-radius:20px;padding:5px 12px;cursor:pointer}
+.mchips button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.strip{display:flex;flex-wrap:wrap;gap:6px;background:var(--chip);border-radius:6px;padding:12px}
+.tok{font:600 .98rem var(--mono);background:var(--panel);color:var(--ink);border:2px solid var(--line);border-radius:4px;padding:6px 9px;cursor:pointer}
+.tok:hover{border-color:var(--accent)}
+.tok[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.explain{border-left:4px solid var(--signal);background:var(--chip);border-radius:0 6px 6px 0;padding:12px 14px;margin-top:12px;min-height:3.2em}
+.explain code{font:700 1.05rem var(--mono)}
+.explain p{margin:4px 0 0}
+.allrows{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin-top:14px;font-size:.92rem}
+.allrows code{font:600 .9rem var(--mono);white-space:nowrap}
+.ctab{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.ctab h3{font:600 1rem var(--display);text-transform:uppercase;letter-spacing:.08em;margin:0 0 6px;color:var(--accent)}
+.ctab dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:.92rem}
+.ctab dt{font:600 .88rem var(--mono);white-space:nowrap}
+.ctab dd{margin:0;color:var(--ink)}
 .mailbox{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .msg{font-size:.88rem;color:var(--muted);margin:0}
@@ -115,6 +136,33 @@ ol.items li{margin:2px 0}
     </div>
     <div class="sub">79 preguntas · DAN 151 Ed. 3</div>
   </header>
+
+  <nav class="tabs" role="tablist" aria-label="Secciones">
+    <button role="tab" id="tab-prac" aria-selected="true" aria-controls="home">Practicar</button>
+    <button role="tab" id="tab-metar" aria-selected="false" aria-controls="guide">Guía METAR</button>
+  </nav>
+
+  <!-- GUIA METAR -->
+  <section id="guide" hidden>
+    <div class="panel">
+      <h2>Lector de METAR</h2>
+      <p class="hint" style="margin:0 0 12px">Elige un METAR del banco y toca cada grupo para ver qué significa.</p>
+      <div class="mchips" id="mchips"></div>
+      <div class="strip" id="strip" aria-label="Grupos del METAR"></div>
+      <div class="explain" id="explain" aria-live="polite"></div>
+      <details style="margin-top:12px"><summary class="tag" style="cursor:pointer">Ver todo el METAR explicado</summary><div class="allrows" id="allrows"></div></details>
+      <div class="row" style="margin-top:14px"><button class="btn ghost" id="mqBtn"></button></div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h2>Códigos que más se preguntan</h2>
+      <div class="ctab" id="ctab"></div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h2>¿Listo para practicar?</h2>
+      <p class="hint" style="margin:0 0 12px">Las 11 preguntas de METAR del banco, en modo Práctica y con la explicación de cada una.</p>
+      <button class="btn" id="metarPractice">Practicar las 11 de METAR</button>
+    </div>
+  </section>
 
   <!-- INICIO -->
   <section id="home" class="panel" aria-labelledby="h-home">
@@ -146,7 +194,7 @@ ol.items li{margin:2px 0}
   </section>
 
   <!-- RANKING -->
-  <section id="rankPanel" class="panel" hidden aria-labelledby="h-rank">
+  <section id="rankPanel" data-off="1" class="panel" hidden aria-labelledby="h-rank">
     <h2 id="h-rank">Ranking del grupo</h2>
     <p class="msg" id="rankMsg">Cargando ranking…</p>
     <form class="namebox" id="nameForm" hidden>
@@ -415,6 +463,40 @@ if(window.claude&&window.claude.use)(async()=>{
     ()=>{$("rankMsg").textContent="No se pudo cargar el ranking. Recarga la página para intentar de nuevo."});
   drawRank();
 })();
+/* ---------- Guía METAR ---------- */
+const METARS = [{"lugar": "Valdivia", "code": "SCVD", "q": [48, 47, 49, 11], "tokens": [["METAR", "Tipo de reporte: observación meteorológica de rutina de un aeródromo."], ["SCVD", "Código OACI del aeródromo: Pichoy, Valdivia. Los aeródromos de Chile empiezan con SC."], ["211400Z", "Día 21 del mes, a las 14:00. La Z indica hora UTC, no hora local."], ["12003KT", "Viento: los 3 primeros dígitos son la dirección desde donde sopla (120°) y los siguientes la velocidad (03 nudos)."], ["0500", "Visibilidad en metros, siempre con 4 dígitos: 0500 = 500 m."], ["VCFG", "VC = en la vecindad (entre 8 y 16 km) y FG = niebla: niebla en la vecindad."], ["BKN020", "BKN = nuboso (5 a 7 octavos de cielo cubierto). La altura va en cientos de pies: 020 = 2.000 pies."], ["04/03", "Temperatura 4 °C y punto de rocío 3 °C. Con solo 1 °C de diferencia el aire está casi saturado: hay riesgo de niebla."], ["Q1026", "QNH, la presión ajustada al nivel del mar: 1026 hPa."], ["NOSIG", "Sin cambios significativos esperados en las próximas 2 horas."]]}, {"lugar": "Punta Arenas", "code": "SCCI", "q": [18], "tokens": [["METAR", "Observación meteorológica de rutina."], ["SCCI", "Aeródromo Presidente Carlos Ibáñez del Campo, Punta Arenas."], ["160800Z", "Día 16, a las 08:00 UTC."], ["29014G24KT", "Viento de 290° con 14 nudos. La G (gust) indica ráfagas: la racha máxima es de 24 nudos."], ["9999", "Visibilidad de 10 km o más."], ["FEW013", "FEW = pocas nubes (1 a 2 octavos) a 1.300 pies."], ["01/M03", "Temperatura 1 °C y punto de rocío −3 °C. La M significa menos (bajo cero)."], ["Q0985", "QNH de 985 hPa."], ["NOSIG", "Sin cambios significativos en las próximas 2 horas."]]}, {"lugar": "Concepción", "code": "SCIE", "q": [67], "tokens": [["METAR", "Observación meteorológica de rutina."], ["SCIE", "Aeródromo Carriel Sur, Concepción."], ["161500Z", "Día 16, a las 15:00 UTC."], ["02005KT", "Viento de 020° con 5 nudos."], ["CAVOK", "Ceiling And Visibility OK: visibilidad de 10 km o más, sin CB, sin nubes bajo 1.500 m (5.000 pies) y sin fenómenos significativos. Reemplaza los grupos de visibilidad, tiempo presente y nubes."], ["12/07", "Temperatura 12 °C y punto de rocío 7 °C."], ["Q1018", "QNH de 1018 hPa."]]}, {"lugar": "Atacama", "code": "SCAT", "q": [68], "tokens": [["METAR", "Observación meteorológica de rutina."], ["SCAT", "Aeródromo Desierto de Atacama, Copiapó."], ["161500Z", "Día 16, a las 15:00 UTC."], ["20008KT", "Viento de 200° con 8 nudos."], ["180V240", "La dirección varía entre 180° y 240°. Se informa cuando cambia 60° o más."], ["7000", "Visibilidad de 7.000 m."], ["SKC", "Sky clear: cielo despejado."], ["15/09", "Temperatura 15 °C y punto de rocío 9 °C."], ["Q1019", "QNH de 1019 hPa."]]}, {"lugar": "Rodelillo", "code": "SCRD", "q": [69], "tokens": [["METAR", "Observación meteorológica de rutina."], ["SCRD", "Aeródromo Rodelillo, Viña del Mar."], ["151700Z", "Día 15, a las 17:00 UTC."], ["VRB01KT", "VRB = dirección variable. Viento muy débil, de 1 nudo, sin dirección definida."], ["0400", "Visibilidad de 400 m."], ["FG", "Niebla: se informa cuando la visibilidad es menor a 1.000 m. Con 1.000 m o más se llama neblina (BR)."], ["OVC002", "OVC = cubierto (8 octavos). Altura 002 × 100 = 200 pies: ese es el techo."], ["15/15", "Temperatura y punto de rocío iguales: el aire está saturado, por eso hay niebla."], ["Q1015", "QNH de 1015 hPa."]]}, {"lugar": "Antofagasta", "code": "SCFA", "q": [70], "tokens": [["METAR", "Observación meteorológica de rutina."], ["SCFA", "Aeródromo Cerro Moreno, Antofagasta."], ["141200Z", "Día 14, a las 12:00 UTC."], ["VRB02KT", "Viento variable de 2 nudos."], ["9999", "Visibilidad de 10 km o más."], ["NSC", "No significant clouds: sin nubosidad significativa. En el banco aparece escrito \"NCS\" por error."], ["12/11", "Temperatura 12 °C y punto de rocío 11 °C."], ["Q1015", "QNH de 1015 hPa."], ["NOSIG", "Sin cambios significativos en las próximas 2 horas."]]}], TABLA = [["Viento", [["KT", "Nudos (velocidad del viento)"], ["G", "Ráfaga: 29014G24KT = rachas de 24 kt"], ["VRB", "Dirección variable"], ["180V240", "La dirección varía entre 180° y 240°"], ["00000KT", "Calma"]]], ["Visibilidad", [["9999", "10 km o más"], ["0500", "500 metros (siempre 4 dígitos)"], ["CAVOK", "10 km o más, sin CB, sin nubes bajo 1.500 m (5.000 ft) y sin fenómenos"]]], ["Fenómenos", [["FG", "Niebla (visibilidad menor a 1.000 m)"], ["BR", "Neblina (1.000 m o más)"], ["BC", "En bancos: BCFG = niebla en bancos"], ["VC", "En la vecindad (8 a 16 km): VCFG"], ["NIL", "Estación ausente o datos faltantes"]]], ["Nubes", [["FEW", "Pocas: 1 a 2 octavos"], ["SCT", "Dispersas: 3 a 4 octavos"], ["BKN", "Nuboso: 5 a 7 octavos"], ["OVC", "Cubierto: 8 octavos"], ["NSC / SKC", "Sin nubosidad significativa / cielo despejado"], ["CB", "Cumulonimbus, la nube más peligrosa"], ["002", "Altura en cientos de pies: 002 = 200 ft, 020 = 2.000 ft"]]], ["Temperatura y presión", [["04/03", "Temperatura / punto de rocío (°C)"], ["M03", "M = menos: −3 °C"], ["Q1026", "Presión QNH en hPa"], ["NOSIG", "Sin cambios en las próximas 2 horas"]]]];
+let mSel=0;
+function showTab(which){
+  const g=which==="metar";
+  $("tab-prac").setAttribute("aria-selected",!g);$("tab-metar").setAttribute("aria-selected",g);
+  $("guide").hidden=!g;$("home").hidden=g;$("quiz").hidden=true;$("result").hidden=true;
+  const rp=$("rankPanel");if(rp&&!rp.dataset.off)rp.hidden=g;
+  if(S&&!g){S=null}
+  if(!g)renderHome();
+  window.scrollTo(0,0);
+}
+$("tab-prac").onclick=()=>showTab("prac");
+$("tab-metar").onclick=()=>showTab("metar");
+function renderMetar(){
+  const m=METARS[mSel];
+  $("mchips").innerHTML=METARS.map((x,i)=>`<button aria-pressed="${i===mSel}" data-i="${i}">${x.lugar}</button>`).join("");
+  $("strip").innerHTML=m.tokens.map((t,i)=>`<button class="tok" data-i="${i}" aria-pressed="false">${esc(t[0])}</button>`).join("");
+  $("explain").innerHTML=`<p class="hint" style="margin:0">Toca un grupo del METAR de ${esc(m.lugar)}.</p>`;
+  $("allrows").innerHTML=m.tokens.map(t=>`<code>${esc(t[0])}</code><span>${esc(t[1])}</span>`).join("");
+  const n=m.q.length;$("mqBtn").textContent=n>1?`Practicar las ${n} preguntas de este METAR`:`Practicar la pregunta de este METAR`;
+}
+$("mchips").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;mSel=+b.dataset.i;renderMetar()});
+$("strip").addEventListener("click",e=>{const b=e.target.closest(".tok");if(!b)return;
+  document.querySelectorAll(".tok").forEach(x=>x.setAttribute("aria-pressed",x===b));
+  const t=METARS[mSel].tokens[+b.dataset.i];$("explain").innerHTML=`<code>${esc(t[0])}</code><p>${esc(t[1])}</p>`});
+$("ctab").innerHTML=TABLA.map(([h,rows])=>`<div><h3>${esc(h)}</h3><dl>${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>`).join("");
+function practiceList(ns){mode="practica";$("tab-prac").setAttribute("aria-selected",true);$("tab-metar").setAttribute("aria-selected",false);$("guide").hidden=true;
+  document.querySelectorAll("#modes .opt").forEach(x=>x.setAttribute("aria-pressed",x.dataset.mode==="practica"));
+  start(shuffle(BANK.filter(q=>ns.includes(q.n))))}
+$("mqBtn").onclick=()=>practiceList(METARS[mSel].q);
+$("metarPractice").onclick=()=>practiceList(BANK.filter(q=>q.t==="METAR").map(q=>q.n));
+renderMetar();
+
 renderHome();
 </script>
 </body></html>
