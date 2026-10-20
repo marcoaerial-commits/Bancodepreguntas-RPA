@@ -237,6 +237,8 @@ ol.items li{margin:2px 0}
     <div class="mailbox" id="mailBox">
       <p class="tag" style="margin:0">Enviar el resultado a mi correo</p>
       <form class="namebox" id="mailForm" style="margin:6px 0 4px">
+        <label for="mailName" class="sr">Tu nombre</label>
+        <input id="mailName" autocomplete="name" maxlength="60" placeholder="Tu nombre y apellido">
         <label for="mailTo" class="sr">Tu correo</label>
         <input id="mailTo" type="email" inputmode="email" autocomplete="email" placeholder="tucorreo@gmail.com">
         <button class="btn" type="submit" id="mailBtn">Enviar a mi correo</button>
@@ -388,12 +390,13 @@ function buildSummary(pct,ok,tot,pass){
   lines.push("","Respuestas de normativa según DAN 151 Ed. 3 (2024).");
   return lines.join("\n");
 }
-try{const m=localStorage.getItem("rpas_mail");if(m)document.getElementById("mailTo").value=m}catch(e){}
+try{const m=localStorage.getItem("rpas_mail");if(m)document.getElementById("mailTo").value=m;const nm=localStorage.getItem("rpas_name");if(nm)document.getElementById("mailName").value=nm}catch(e){}
 const MAIL_URL = "https://script.google.com/macros/s/AKfycbzT5Gh686I3e7Um9ziWgjJTwsPj3ny91gR98MnwYIoY4ejOQvUPzn0CTKAM2I-M_ngL0A/exec";  // URL de la app web de Google Apps Script (simuladorrpa@gmail.com)
 document.getElementById("mailForm").addEventListener("submit",async e=>{
   e.preventDefault(); if(!S||!S.summary)return;
-  const to=$("mailTo").value.trim(); try{if(to)localStorage.setItem("rpas_mail",to)}catch(e){}
+  const to=$("mailTo").value.trim(), nombre=$("mailName").value.trim(); try{if(to)localStorage.setItem("rpas_mail",to);if(nombre)localStorage.setItem("rpas_name",nombre)}catch(e){}
   if(MAIL_URL){
+    if(!nombre){$("copyMsg").textContent="Escribe tu nombre para enviar el resultado.";$("mailName").focus();return}
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)){$("copyMsg").textContent="Escribe un correo válido, por ejemplo nombre@gmail.com.";$("mailTo").focus();return}
     const items=S.ans.map(a=>{const q=BANK.find(x=>x.n===a.n);return {n:q.n,t:q.t,q:q.q,it:q.it,ok:a.ok,
       pickTxt:a.pick==null?"":L[a.pick]+") "+q.o[a.pick],correctTxt:L[q.a]+") "+q.o[q.a],nota:q.nota||""}});
@@ -401,7 +404,7 @@ document.getElementById("mailForm").addEventListener("submit",async e=>{
     $("mailBtn").disabled=true;$("mailBtn").textContent="Enviando…";$("copyMsg").textContent="";
     try{
       await fetch(MAIL_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},
-        body:JSON.stringify({to,mode:S.mode,pct:Math.round(ok/S.ans.length*100),ok,tot:S.ans.length,items,temas:S.byTema})});
+        body:JSON.stringify({to,nombre,mode:S.mode,pct:Math.round(ok/S.ans.length*100),ok,tot:S.ans.length,items,temas:S.byTema})});
       $("mailBtn").textContent="Enviado ✔";
       $("copyMsg").textContent=`Listo. En un minuto te llega a ${to}. Si no lo ves, revisa la carpeta de spam.`;
     }catch(err){
